@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, BackgroundTasks
 import requests
 import asyncio
@@ -12,7 +13,7 @@ def send_telegram_alert(match_name: str, score: str, minute: str, signal: str):
     message = (
         f"⚽ *BBK Live Signal*\n\n"
         f"🏆 Match: {match_name}\n"
-        f"⏱ Time: {minute}\n"
+        f"⏱ Time: {minute}'\n"
         f"📊 Score: {score}\n"
         f"💡 Signal: {signal}"
     )
@@ -22,30 +23,23 @@ def send_telegram_alert(match_name: str, score: str, minute: str, signal: str):
         "parse_mode": "Markdown"
     }
     try:
-        requests.post(url, json=payload)
+        response = requests.post(url, json=payload)
+        print("Telegram Response:", response.text)
     except Exception as e:
-        print(f"Error: {e}")
+        print("Error:", e)
 
 @app.get("/")
 def home():
     return {"status": "Running"}
 
 async def fetch_and_scan_live_matches():
-    try:
-        url = "https://www.thesportsdb.com/api/v1/json/3/latestsoccer.php"
-        requests.get(url)
-        
-        sample_live = [
-            {"home": "Live Team A", "away": "Live Team B", "score": "1 - 0", "minute": "68'", "signal": "ТБ 1.5"}
-        ]
-        
-        for match in sample_live:
-            match_name = f"{match['home']} vs {match['away']}"
-            send_telegram_alert(match_name, match['score'], match['minute'], match['signal'])
-            await asyncio.sleep(2)
-            
-    except Exception as e:
-        print(f"API Error: {e}")
+    sample_live = [
+        {"home": "Live Match 1", "away": "Live Match 2", "score": "0 - 0", "minute": "72", "signal": "ТБ 0.5"}
+    ]
+    
+    for match in sample_live:
+        send_telegram_alert(match["home"] + " vs " + match["away"], match["score"], match["minute"], match["signal"])
+        await asyncio.sleep(2)
 
 @app.get("/api/run-live-scan")
 async def run_live_scan(background_tasks: BackgroundTasks):
