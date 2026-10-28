@@ -4,7 +4,7 @@ import requests
 app = FastAPI(title="BBK Decision Terminal API")
 
 TELEGRAM_BOT_TOKEN = "8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc"
-CHAT_ID = "@TpterminalBot"
+CHAT_ID = "1296460762"
 
 def send_telegram_alert(match_name: str, signal: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -23,7 +23,6 @@ def send_telegram_alert(match_name: str, signal: str):
 def home():
     return {"status": "BBK Terminal is running successfully!"}
 
-# Fakkeenya test godhuuf
 @app.get("/api/test-telegram")
 def test_telegram():
     send_telegram_alert("Venezia — Inter", "ТБ 0.5 (Pressure high)")
