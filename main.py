@@ -1,14 +1,15 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 import requests
+import asyncio
 
-app = FastAPI(title="BBK Decision Terminal API")
+app = FastAPI(title="BBK Terminal")
 
 TELEGRAM_BOT_TOKEN = "8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc"
 CHAT_ID = "1296460762"
 
 def send_telegram_alert(match_name: str, signal: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    message = f"⚽ *BBK Betting Signal*\n\nMatch: {match_name}\nSignal: {signal}"
+    message = f"⚽ *BBK Signal*\n\nMatch: {match_name}\nSignal: {signal}"
     payload = {
         "chat_id": CHAT_ID,
         "text": message,
@@ -21,10 +22,21 @@ def send_telegram_alert(match_name: str, signal: str):
 
 @app.get("/")
 def home():
-    return {"status": "BBK Terminal is running successfully!"}
+    return {"status": "Running"}
 
-@app.get("/api/test-telegram")
-def test_telegram():
-    send_telegram_alert("Venezia — Inter", "ТБ 0.5 (Pressure high)")
-    return {"status": "Telegram alert sent successfully!"}
+async def monitor_live_matches():
+    live_matches = [
+        {"home": "Real Madrid", "away": "Barcelona", "minute": "75'", "signal": "ТБ 1.5"},
+        {"home": "Arsenal", "away": "Chelsea", "minute": "82'", "signal": "Next Goal: Home"}
+    ]
+    
+    for match in live_matches:
+        match_name = f"{match['home']} vs {match['away']} ({match['minute']})"
+        send_telegram_alert(match_name, match['signal'])
+        await asyncio.sleep(2)
+
+@app.get("/api/run-live-scan")
+async def run_live_scan(background_tasks: BackgroundTasks):
+    background_tasks.add_task(monitor_live_matches)
+    return {"status": "Started"}
 
