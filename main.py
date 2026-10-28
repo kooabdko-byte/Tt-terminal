@@ -1,34 +1,31 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import requests
 
 app = FastAPI(title="BBK Decision Terminal API")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+TELEGRAM_BOT_TOKEN = "TOKEN_BOT_KEETII_ASITTI_GALCHI"
+CHAT_ID = "CHAT_ID_KEETII_ASITTI_GALCHI"
+
+def send_telegram_alert(match_name: str, signal: str):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    message = f"⚽ *BBK Betting Signal*\n\nMatch: {match_name}\nSignal: {signal}"
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    try:
+        requests.post(url, json=payload)
+    except Exception as e:
+        print(f"Error: {e}")
 
 @app.get("/")
 def home():
     return {"status": "BBK Terminal is running successfully!"}
 
-@app.get("/api/matches/live")
-def get_live_matches():
-    return {
-        "status": "success",
-        "matches": [
-            {
-                "match": "Venezia — Inter",
-                "league": "Serie A",
-                "minute": 61,
-                "score": "0:0",
-                "dominance": "Inter",
-                "pressure_status": "🔥 давление нарастает",
-                "moment": "возможный гол во 2-м тайме",
-                "bet_option": "ТБ 0.5"
-            }
-        ]
-    }
+# Fakkeenya test godhuuf
+@app.get("/api/test-telegram")
+def test_telegram():
+    send_telegram_alert("Venezia — Inter", "ТБ 0.5 (Pressure high)")
+    return {"status": "Telegram alert sent successfully!"}
+
