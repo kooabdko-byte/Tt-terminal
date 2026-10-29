@@ -12,9 +12,7 @@ logger = logging.getLogger("BBK")
 BOT_TOKEN = "8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc"
 CHAT_ID = "1296460762"
 
-ODDS_API_KEY = "2ae0b47303c1ef8968ef1268900362ed"
-
-LIVE_URL = f"https://api.the-odds-api.com/v4/sports/soccer/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=h2h&dateFormat=iso"
+LIVE_URL = "https://www.scorebat.com/video-api/v3/feed/"
 
 seen_matches = set()
 
@@ -61,7 +59,28 @@ def telegram_send(text):
 def get_live_matches():
     response = requests.get(LIVE_URL, timeout=20)
     response.raise_for_status()
-    matches = response.json()
+    data = response.json()
+    response_data = data.get("response", [])
+    
+    matches = []
+    for item in response_data:
+        title = item.get("title", "")
+        league = item.get("competition", "Live Match")
+        match_id = item.get("match_id") or title
+        
+        teams = title.split(" - ")
+        home = teams[0] if len(teams) > 1 else "Home"
+        away = teams[1] if len(teams) > 1 else "Away"
+        
+        matches.append({
+            "id": str(match_id),
+            "home": home,
+            "away": away,
+            "league": league,
+            "score": "Live",
+            "minute": "Live"
+        })
+        
     return matches
 
 
@@ -76,15 +95,13 @@ async def scan_matches():
                 if not match_id:
                     continue
 
-                home = match.get("home_team", "Home")
-                away = match.get("away_team", "Away")
-                league = match.get("sport_title", "Football League")
+                home = match.get("home", "Home")
+                away = match.get("away", "Away")
+                league = match.get("league", "Football League")
+                score = match.get("score", "Live")
+                minute = match.get("minute", "Live")
 
-                score = "0:0"
-                minute = "Live"
-
-                state = f"{score}|{minute}"
-                unique_key = f"{match_id}|{state}"
+                unique_key = f"{match_id}"
 
                 if unique_key in seen_matches:
                     continue
