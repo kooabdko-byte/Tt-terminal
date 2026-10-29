@@ -12,7 +12,7 @@ logger = logging.getLogger("BBK")
 BOT_TOKEN = os.getenv("8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc", "").strip()
 CHAT_ID = os.getenv("1296460762", "").strip()
 
-LIVE_URL = "https://www.thesportsdb.com/api/v1/json/3/livescore.php?l=4328"
+LIVE_URL = "https://raw.githubusercontent.com/openfootball/football.json/master/2023-24/en.1.json"
 
 seen_matches = set()
 
@@ -65,7 +65,8 @@ def get_live_matches():
     response = requests.get(LIVE_URL, headers=headers, timeout=20)
     response.raise_for_status()
     data = response.json()
-    return data.get("events") or []
+    matches = data.get("matches") or data.get("events") or []
+    return matches
 
 
 async def scan_matches():
@@ -74,20 +75,24 @@ async def scan_matches():
             matches = await asyncio.to_thread(get_live_matches)
 
             for match in matches:
-                match_id = match.get("idEvent")
+                match_id = match.get("id") or match.get("idEvent")
 
                 if not match_id:
                     continue
 
-                home = match.get("strHomeTeam") or "Home"
-                away = match.get("strAwayTeam") or "Away"
-                league = match.get("strLeague") or "Unknown league"
+                team1 = match.get("team1")
+                team2 = match.get("team2")
+                if isinstance(team1, dict):
+                    home = team1.get("name", "Home")
+                    away = team2.get("name", "Away")
+                else:
+                    home = match.get("strHomeTeam") or "Home"
+                    away = match.get("strAwayTeam") or "Away"
+                    
+                league = match.get("name") or match.get("strLeague") or "Unknown league"
 
-                home_score = match.get("intHomeScore") or "0"
-                away_score = match.get("intAwayScore") or "0"
-
-                score = f"{home_score}:{away_score}"
-                minute = match.get("strProgress") or "0"
+                score = "0:0"
+                minute = "Live"
 
                 state = f"{score}|{minute}"
                 unique_key = f"{match_id}|{state}"
@@ -98,7 +103,7 @@ async def scan_matches():
                 message = (
                     f"🔥 *ВАЖНЫЙ СИГНАЛ — BBK Terminal*\n\n"
                     f"⚽ {home} — {away} ({league})\n"
-                    f"⏱ {minute}' · счёт {score}\n"
+                    f"⏱ {minute} · счёт {score}\n"
                     f"🔥 Давит: {home}\n"
                     f"🔥 давление нарастает\n\n"
                     f"📌 Момент: возможный гол во 2-м тайме\n"
