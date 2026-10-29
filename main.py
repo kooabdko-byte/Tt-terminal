@@ -31,15 +31,7 @@ def telegram_send(text):
             json={
                 "chat_id": CHAT_ID,
                 "text": text,
-                "parse_mode": "Markdown",
-                "reply_markup": {
-                    "inline_keyboard": [[
-                        {
-                            "text": "Открыть терминал",
-                            "callback_data": "open_terminal"
-                        }
-                    ]]
-                }
+                "parse_mode": "Markdown"
             },
             timeout=15
         )
@@ -57,45 +49,34 @@ def telegram_send(text):
 
 
 def get_live_matches():
-    try:
-        response = requests.get(LIVE_URL, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        response_data = data.get("response", [])
+    response = requests.get(LIVE_URL, timeout=20)
+    response.raise_for_status()
+    data = response.json()
+    response_data = data.get("response", [])
+    
+    matches = []
+    for item in response_data:
+        title = item.get("title", "")
+        league = item.get("competition", "Live Match")
+        match_id = item.get("match_id") or title
         
-        matches = []
-        for item in response_data:
-            title = item.get("title", "")
-            league = item.get("competition", "Live Match")
-            match_id = item.get("match_id") or title
+        teams = title.split(" - ")
+        if len(teams) < 2:
+            continue
             
-            teams = title.split(" - ")
-            home = teams[0] if len(teams) > 1 else "Home"
-            away = teams[1] if len(teams) > 1 else "Away"
-            
-            matches.append({
-                "id": str(match_id),
-                "home": home,
-                "away": away,
-                "league": league,
-                "score": "Live",
-                "minute": "Live"
-            })
+        home = teams[0].strip()
+        away = teams[1].strip()
         
-        if matches:
-            return matches
-    except Exception:
-        logger.warning("ScoreBat fetch failed, using fallback data.")
-
-    # Fallback data akka endpoint-ichi yoomiyyuu error hin kennineef
-    return [{
-        "id": "fallback_match_1",
-        "home": "Live Match Testing",
-        "away": "BBK System",
-        "league": "Terminal League",
-        "score": "0:0",
-        "minute": "Live"
-    }]
+        matches.append({
+            "id": str(match_id),
+            "home": home,
+            "away": away,
+            "league": league,
+            "score": "Live",
+            "minute": "Live"
+        })
+        
+    return matches
 
 
 async def scan_matches():
@@ -106,7 +87,7 @@ async def scan_matches():
             for match in matches:
                 match_id = match.get("id")
 
-                if not match_id:
+                if not match_id or match_id in seen_matches:
                     continue
 
                 home = match.get("home", "Home")
@@ -115,25 +96,19 @@ async def scan_matches():
                 score = match.get("score", "Live")
                 minute = match.get("minute", "Live")
 
-                unique_key = f"{match_id}"
-
-                if unique_key in seen_matches:
-                    continue
-
                 message = (
-                    f"🔥 *ВАЖНЫЙ СИГНАЛ — BBK Terminal*\n\n"
-                    f"⚽ {home} — {away} ({league})\n"
+                    f"🔥🔥 *ПИК ДАВЛЕНИЯ — BBK Terminal*\n\n"
+                    f"{home} — {away} ({league})\n"
                     f"⏱ {minute} · счёт {score}\n"
-                    f"🔥 Давит: {home}\n"
-                    f"🔥 давление нарастает\n\n"
-                    f"📌 Момент: возможный гол во 2-м тайме\n"
-                    f"💡 Вариант входа: ТБ 0.5"
+                    f"Давит: {home}\n"
+                    f"🔥 давление нарастает · ⚡ бьют чаще\n\n"
+                    f"Момент: возможный гол в концовке матча"
                 )
 
                 sent = await asyncio.to_thread(telegram_send, message)
 
                 if sent:
-                    seen_matches.add(unique_key)
+                    seen_matches.add(match_id)
 
                 await asyncio.sleep(1)
 
@@ -154,14 +129,14 @@ async def lifespan(app: FastAPI):
         pass
 
 
-app = FastAPI(title="BBK Terminal", lifespan=lifespan)
+app = FastAPI(title="Terminal BBK", lifespan=lifespan)
 
 
 @app.get("/")
 def home():
     return {
         "status": "Running",
-        "service": "BBK Terminal"
+        "service": "Terminal BBK"
     }
 
 
