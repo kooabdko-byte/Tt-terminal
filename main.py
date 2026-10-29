@@ -122,7 +122,6 @@ def get_live_matches_from_rapidapi():
             away = teams.get("away", {}).get("name", "Away")
             league = league_info.get("name", "League")
             
-            # Koodiin kun sirreeffameera (mallattoon dogoggoraa hin qabu)
             home_goals = goals.get("home", 0) if goals.get("home") is not None else 0
             away_goals = goals.get("away", 0) if goals.get("away") is not None else 0
             score = f"{home_goals}:{away_goals}"
@@ -196,3 +195,11 @@ def home():
 def api_live_matches():
     matches = get_live_matches_from_rapidapi()
     return {"status": "success", "count": len(matches), "matches": matches}
+
+@app.get("/api/test-telegram")
+def test_telegram():
+    success = telegram_send("Test Home", "Test Away", "Test League", "45'", "0:0", "Test Team")
+    if success:
+        return {"status": "success", "message": "Ergaan Telegram irratti milkaa'inaan ergameera!"}
+    else:
+        return {"status": "error", "message": "Ergaa erguu irratti rakkoon jira, Bot Token ykn Chat ID kee ilaali."}
