@@ -18,8 +18,13 @@ seen_matches = set()
 
 
 def telegram_send(text):
+    global BOT_TOKEN, CHAT_ID
     if not BOT_TOKEN or not CHAT_ID:
-        logger.error("Telegram token or chat ID is missing")
+        BOT_TOKEN = os.getenv("8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc", "").strip()
+        CHAT_ID = os.getenv("1296460762", "").strip()
+
+    if not BOT_TOKEN or not CHAT_ID:
+        logger.error(f"CRITICAL: Telegram token ('{BOT_TOKEN}') or chat ID ('{CHAT_ID}') is missing!")
         return False
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
