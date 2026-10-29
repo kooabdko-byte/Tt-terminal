@@ -147,3 +147,11 @@ def home():
 def api_live_matches():
     matches = get_live_matches_from_rapidapi()
     return {"status": "success", "count": len(matches), "matches": matches}
+
+@app.get("/api/test-telegram")
+def test_telegram():
+    success = telegram_send("Test Home", "Test Away", "Test League", "45'", "0:0", "Test Team")
+    if success:
+        return {"status": "success", "message": "Ergaan Telegram irratti milkaa'inaan ergameera!"}
+    else:
+        return {"status": "error", "message": "Ergaa erguu irratti rakkoon jira, Bot Token ykn Chat ID kee ilaali."}
