@@ -44,16 +44,17 @@ def telegram_send(text):
         )
 
         result = response.json()
+        logger.info(f"Telegram Raw Response: {result}")
 
         if not result.get("ok"):
-            logger.error("Telegram API error: %s", result)
+            logger.error(f"Telegram API error description: {result.get('description')}")
             return False
 
-        logger.info("Telegram message sent")
+        logger.info("Telegram message sent successfully")
         return True
 
-    except Exception:
-        logger.exception("Telegram sending failed")
+    except Exception as e:
+        logger.exception(f"Telegram sending failed with exception: {e}")
         return False
 
 
@@ -68,8 +69,6 @@ async def scan_matches():
     while True:
         try:
             matches = await asyncio.to_thread(get_live_matches)
-
-            logger.info("Live matches found: %s", len(matches))
 
             for match in matches:
                 match_id = match.get("idEvent")
@@ -88,7 +87,6 @@ async def scan_matches():
                 minute = match.get("strProgress") or "0"
 
                 state = f"{score}|{minute}"
-
                 unique_key = f"{match_id}|{state}"
 
                 if unique_key in seen_matches:
@@ -187,4 +185,3 @@ async def run_live_scan():
             "status": "error",
             "message": "Live scan failed. Check Render logs."
         }
-
