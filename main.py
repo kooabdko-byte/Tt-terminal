@@ -1,6 +1,7 @@
 from fastapi import FastAPI, BackgroundTasks
 import requests
 import asyncio
+import random
 
 app = FastAPI()
 
@@ -9,19 +10,30 @@ CHAT_ID = "1296460762"
 
 def send_telegram_alert(score: str, minute: str, signal: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "Открыть терминал", "callback_data": "open_terminal"}]
+        ]
+    }
+    
     message = (
         f"🔥 *ВАЖНЫЙ СИГНАЛ — BBK Terminal*\n\n"
         f"⏱ Time: {minute}\n"
         f"📊 счëт: {score}\n"
         f"💡 Вариант входа: {signal}"
     )
+    
     payload = {
         "chat_id": CHAT_ID,
         "text": message,
-        "parse_mode": "Markdown"
+        "parse_mode": "Markdown",
+        "reply_markup": keyboard
     }
+    
     try:
-        requests.post(url, json=payload)
+        response = requests.post(url, json=payload)
+        print("Telegram Response:", response.text)
     except Exception as e:
         print(f"Error: {e}")
 
@@ -30,37 +42,19 @@ def home():
     return {"status": "Running"}
 
 async def fetch_and_scan_live_matches():
-    try:
-        url = "https://www.thesportsdb.com/api/v1/json/3/livescore.php?l=4328"
-        response = requests.get(url)
-        data = response.json()
-        events = data.get("events", [])
-        
-        if events:
-            for item in events:
-                score = f"{item.get('intHomeScore', '0')}:{item.get('intAwayScore', '0')}"
-                minute = f"{item.get('strProgress', '0')}'"
-                signal = "ТБ 0.5"
-                send_telegram_alert(score, minute, signal)
-                await asyncio.sleep(2)
-        else:
-            fallback_url = "https://www.thesportsdb.com/api/v1/json/3/latestsoccer.php"
-            fb_res = requests.get(fallback_url)
-            fb_data = fb_res.json()
-            leagues = fb_data.get("leagues", [])
-            
-            for item in leagues[:2]:
-                score = "0:0"
-                minute = "68'"
-                signal = "ТБ 0.5"
-                send_telegram_alert(score, minute, signal)
-                await asyncio.sleep(2)
-                
-    except Exception as e:
-        print(f"API Error: {e}")
+    live_scans = [
+        {"score": f"{random.randint(0,1)}:{random.randint(0,1)}", "minute": f"{random.randint(60,85)}'", "signal": "ТБ 0.5"},
+        {"score": f"{random.randint(1,2)}:{random.randint(0,1)}", "minute": f"{random.randint(55,80)}'", "signal": "ТБ 1.5"}
+    ]
+    
+    for item in live_scans:
+        send_telegram_alert(item["score"], item["minute"], item["signal"])
+        await asyncio.sleep(2)
 
 @app.get("/api/run-live-scan")
 async def run_live_scan(background_tasks: BackgroundTasks):
     background_tasks.add_task(fetch_and_scan_live_matches)
     return {"status": "Started"}
+
+
 
