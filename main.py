@@ -12,7 +12,9 @@ logger = logging.getLogger("BBK")
 BOT_TOKEN = "8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc"
 CHAT_ID = "1296460762"
 
-LIVE_URL = "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=2026-10-29"
+ODDS_API_KEY = "2ae0b47303c1ef8968ef1268900362ed"
+
+LIVE_URL = f"https://api.the-odds-api.com/v4/sports/soccer/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=h2h&dateFormat=iso"
 
 seen_matches = set()
 
@@ -20,7 +22,7 @@ seen_matches = set()
 def telegram_send(text):
     global BOT_TOKEN, CHAT_ID
     if not BOT_TOKEN or not CHAT_ID:
-        logger.error(f"CRITICAL: Telegram token or chat ID is missing!")
+        logger.error("CRITICAL: Telegram token or chat ID is missing!")
         return False
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -57,13 +59,9 @@ def telegram_send(text):
 
 
 def get_live_matches():
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    response = requests.get(LIVE_URL, headers=headers, timeout=20)
+    response = requests.get(LIVE_URL, timeout=20)
     response.raise_for_status()
-    data = response.json()
-    matches = data.get("events") or []
+    matches = response.json()
     return matches
 
 
@@ -73,17 +71,17 @@ async def scan_matches():
             matches = await asyncio.to_thread(get_live_matches)
 
             for match in matches:
-                match_id = match.get("idEvent")
+                match_id = match.get("id")
 
                 if not match_id:
                     continue
 
-                home = match.get("strHomeTeam") or "Home"
-                away = match.get("strAwayTeam") or "Away"
-                league = match.get("strLeague") or "Unknown league"
+                home = match.get("home_team", "Home")
+                away = match.get("away_team", "Away")
+                league = match.get("sport_title", "Football League")
 
                 score = "0:0"
-                minute = match.get("strTime") or "Live"
+                minute = "Live"
 
                 state = f"{score}|{minute}"
                 unique_key = f"{match_id}|{state}"
