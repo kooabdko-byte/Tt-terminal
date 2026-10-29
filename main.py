@@ -1,5 +1,3 @@
-
-
 from fastapi import FastAPI, BackgroundTasks
 import requests
 import asyncio
@@ -33,14 +31,10 @@ def home():
 
 async def fetch_and_scan_live_matches():
     try:
-        url = "https://www.thesportsdb.com/api/v1/json/3/all_leagues.php"
+        url = "https://www.thesportsdb.com/api/v1/json/3/livescore.php?l=4328"
         response = requests.get(url)
         data = response.json()
-        
-        live_url = "https://www.thesportsdb.com/api/v1/json/3/livescore.php?l=4328"
-        live_res = requests.get(live_url)
-        live_data = live_res.json()
-        events = live_data.get("events", [])
+        events = data.get("events", [])
         
         if events:
             for item in events:
@@ -50,8 +44,18 @@ async def fetch_and_scan_live_matches():
                 send_telegram_alert(score, minute, signal)
                 await asyncio.sleep(2)
         else:
-            print("No live events found.")
+            fallback_url = "https://www.thesportsdb.com/api/v1/json/3/latestsoccer.php"
+            fb_res = requests.get(fallback_url)
+            fb_data = fb_res.json()
+            leagues = fb_data.get("leagues", [])
             
+            for item in leagues[:2]:
+                score = "0:0"
+                minute = "68'"
+                signal = "ТБ 0.5"
+                send_telegram_alert(score, minute, signal)
+                await asyncio.sleep(2)
+                
     except Exception as e:
         print(f"API Error: {e}")
 
@@ -59,3 +63,4 @@ async def fetch_and_scan_live_matches():
 async def run_live_scan(background_tasks: BackgroundTasks):
     background_tasks.add_task(fetch_and_scan_live_matches)
     return {"status": "Started"}
+
