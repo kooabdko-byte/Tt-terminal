@@ -53,6 +53,53 @@ def telegram_send(home, away, league, minute, score, pressure_team):
         logger.exception(f"Telegram error: {e}")
         return False
 
+def get_match_statistics(match_id, home_name, away_name):
+    """
+    Запрашивает детальную статистику матча, чтобы узнать, кто наносит больше ударов.
+    """
+    url = f"https://{RAPIDAPI_HOST}/v3/fixtures/statistics"
+    headers = {
+        "X-RapidAPI-Key": RAPIDAPI_KEY,
+        "X-RapidAPI-Host": RAPIDAPI_HOST
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params={"fixture": match_id}, timeout=10)
+        if response.status_code != 200:
+            return home_name  # По умолчанию возвращаем хозяев
+
+        data = response.json().get("response", [])
+        if len(data) < 2:
+            return home_name
+
+        home_shots = 0
+        away_shots = 0
+
+        # Парсим статистику ударов (Total Shots или Shots on Goal)
+        for team_stat in data:
+            team_name = team_stat.get("team", {}).get("name")
+            statistics = team_stat.get("statistics", [])
+            
+            shots = 0
+            for stat in statistics:
+                if stat.get("type") in ["Total Shots", "Shots on Goal"]:
+                    val = stat.get("value")
+                    if val is not None:
+                        shots += int(val)
+            
+            if team_name == home_name:
+                home_shots = shots
+            else:
+                away_shots = shots
+
+        # Сравниваем, кто бьет чаще
+        if away_shots > home_shots:
+            return away_name
+        return home_name
+
+    except Exception:
+        return home_name
+
 def get_live_matches_from_rapidapi():
     url = f"https://{RAPIDAPI_HOST}/v3/fixtures"
     querystring = {"live": "all"}
@@ -80,12 +127,15 @@ def get_live_matches_from_rapidapi():
             away = teams.get("away", {}).get("name", "Away")
             league = league_info.get("name", "League")
             
-            home_goals = goals.get("home", 0)
-            away_goals = goals.get("away", 0)
-            score = f"{home_goals if home_goals is not None else 0}:{away_goals if away_goals is not None else 0}"
+            home_goals = goals.get("home", 0) if goals.get("home"] is not None else 0
+            away_goals = goals.get("away", 0) if goals.get("away"] is not None else 0
+            score = f"{home_goals}:{away_goals}"
             
             elapsed = fixture.get("status", {}).get("elapsed", 0)
             minute = f"{elapsed}'" if elapsed else "Live"
+
+            # Автоматический анализ: узнаем через API, кто давит / бьет чаще
+            pressure_team = get_match_statistics(match_id, home, away)
 
             matches.append({
                 "id": str(match_id),
@@ -94,7 +144,7 @@ def get_live_matches_from_rapidapi():
                 "league": league,
                 "score": score,
                 "minute": minute,
-                "pressure_team": home
+                "pressure_team": pressure_team
             })
 
         return matches
@@ -114,14 +164,18 @@ async def scan_matches():
 
                 sent = await asyncio.to_thread(
                     telegram_send,
-                    match["home"], match["away"], match["league"],
-                    match["minute"], match["score"], match["pressure_team"]
+                    match["home"], 
+                    match["away"], 
+                    match["league"],
+                    match["minute"], 
+                    match["score"], 
+                    match["pressure_team"]
                 )
 
                 if sent:
                     seen_matches.add(match_id)
 
-                await asyncio.sleep(1)
+                await asyncio.sleep(2)
         except Exception:
             logger.exception("Scan loop error")
 
@@ -147,11 +201,3 @@ def home():
 def api_live_matches():
     matches = get_live_matches_from_rapidapi()
     return {"status": "success", "count": len(matches), "matches": matches}
-
-@app.get("/api/test-telegram")
-def test_telegram():
-    success = telegram_send("Test Home", "Test Away", "Test League", "45'", "0:0", "Test Team")
-    if success:
-        return {"status": "success", "message": "Ergaan Telegram irratti milkaa'inaan ergameera!"}
-    else:
-        return {"status": "error", "message": "Ergaa erguu irratti rakkoon jira, Bot Token ykn Chat ID kee ilaali."}
