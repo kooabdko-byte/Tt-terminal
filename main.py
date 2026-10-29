@@ -1,80 +1,144 @@
-from fastapi import FastAPI, BackgroundTasks
-import requests
+import os
 import asyncio
+import logging
+import requests
 
-app = FastAPI()
+from fastapi import FastAPI, BackgroundTasks
 
-TELEGRAM_BOT_TOKEN = "8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc"
-CHAT_ID = "1296460762"
+app = FastAPI(title="BBK Terminal")
 
-def send_telegram_alert(match_name: str, score: str, minute: str, pressure: str, action_type: str, moment: str, signal: str):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    
-    keyboard = {
-        "inline_keyboard": [
-            [{"text": "Открыть терминал", "callback_data": "open_terminal"}]
-        ]
-    }
-    
-    message = (
-        f"🔥 *ВАЖНЫЙ СИГНАЛ — BBK Terminal*\n\n"
-        f"⚽ {match_name}\n"
-        f"⏱ {minute} · счёт {score}\n"
-        f"🔥 Давит: {pressure}\n"
-        f"{action_type}\n\n"
-        f"📌 Момент: {moment}\n"
-        f"💡 Вариант входа: {signal}"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("bbk")
+
+# Put these values in your hosting environment variables.
+TELEGRAM_BOT_TOKEN = os.getenv("8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc", "")
+CHAT_ID = os.getenv("1296460762", "")
+
+LIVE_URL = (
+    "https://www.thesportsdb.com/"
+    "api/v1/json/3/livescore.php?s=Soccer"
+)
+
+seen_matches = {}
+
+
+def send_telegram_message(text):
+    if not TELEGRAM_BOT_TOKEN or not CHAT_ID:
+        logger.error("Telegram token or chat ID is missing.")
+        return False
+
+    url = (
+        f"https://api.telegram.org/"
+        f"bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     )
-    
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown",
-        "reply_markup": keyboard
-    }
-    
+
     try:
-        requests.post(url, json=payload)
-    except Exception as e:
-        print(f"Error: {e}")
+        response = requests.post(
+            url,
+            json={
+                "chat_id": CHAT_ID,
+                "text": text,
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+
+        result = response.json()
+        return result.get("ok", False)
+
+    except requests.RequestException as exc:
+        logger.error("Telegram request failed: %s", exc)
+        return False
+
 
 @app.get("/")
 def home():
-    return {"status": "Running"}
+    return {
+        "status": "Running",
+        "service": "BBK Terminal",
+    }
 
-async def fetch_and_scan_live_matches():
+
+@app.get("/api/live-scores")
+async def live_scores():
     try:
-        url = "https://www.thesportsdb.com/api/v1/json/3/livescore.php?l=4328"
-        response = requests.get(url)
+        response = await asyncio.to_thread(
+            requests.get,
+            LIVE_URL,
+            timeout=15,
+        )
+        response.raise_for_status()
         data = response.json()
-        events = data.get("events", [])
-        
-        if events:
-            for item in events:
-                home_team = item.get("strHomeTeam", "Home")
-                away_team = item.get("strAwayTeam", "Away")
-                league = item.get("strLeague", "Live")
-                match_name = f"{home_team} — {away_team} ({league})"
-                score = f"{item.get('intHomeScore', '0')}:{item.get('intAwayScore', '0')}"
-                minute = f"{item.get('strProgress', '0')}'"
-                
-                send_telegram_alert(
-                    match_name,
-                    score,
-                    minute,
-                    home_team,
-                    "🔥 давление нарастает",
-                    "возможный гол во 2-м тайме",
-                    "ТБ 0.5"
-                )
-                await asyncio.sleep(2)
-        else:
-            print("No active live matches found at the moment.")
-            
-    except Exception as e:
-        print(f"API Error: {e}")
+
+        events = data.get("events") or data.get("livescore") or []
+
+        return {
+            "status": "success",
+            "count": len(events),
+            "matches": events,
+        }
+
+    except (requests.RequestException, ValueError) as exc:
+        logger.error("Live-score request failed: %s", exc)
+        return {
+            "status": "error",
+            "message": "Live-score data is temporarily unavailable.",
+        }
+
 
 @app.get("/api/run-live-scan")
 async def run_live_scan(background_tasks: BackgroundTasks):
-    background_tasks.add_task(fetch_and_scan_live_matches)
-    return {"status": "Started"}
+    background_tasks.add_task(scan_matches)
+
+    return {
+        "status": "Started",
+        "message": "Live-score scan started.",
+    }
+
+
+async def scan_matches():
+    try:
+        response = await asyncio.to_thread(
+            requests.get,
+            LIVE_URL,
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        events = data.get("events") or data.get("livescore") or []
+
+        for item in events:
+            home = item.get("strHomeTeam", "Home")
+            away = item.get("strAwayTeam", "Away")
+            league = item.get("strLeague", "Unknown league")
+            score_home = item.get("intHomeScore")
+            score_away = item.get("intAwayScore")
+            minute = item.get("strProgress", "Unknown")
+
+            match_id = item.get("idEvent") or f"{home}-{away}"
+
+            score = f"{score_home}:{score_away}"
+            state = f"{score}|{minute}"
+
+            # Send only when the score/state changes.
+            if seen_matches.get(match_id) == state:
+                continue
+
+            seen_matches[match_id] = state
+
+            message = (
+                "⚽ BBK TERMINAL — LIVE SCORE\n\n"
+                f"🏆 League: {league}\n"
+                f"⚽ Match: {home} — {away}\n"
+                f"📊 Score: {score}\n"
+                f"⏱ Progress: {minute}\n\n"
+                "ℹ️ Live-score information only.\n"
+                "Score and match status depend on the data provider."
+            )
+
+            await asyncio.to_thread(send_telegram_message, message)
+            await asyncio.sleep(1)
+
+    except (requests.RequestException, ValueError) as exc:
+        logger.error("Live scan failed: %s", exc)
