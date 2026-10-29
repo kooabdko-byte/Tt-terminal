@@ -97,6 +97,7 @@ def get_match_statistics(match_id, home_name, away_name):
 
 def get_live_matches_from_rapidapi():
     url = f"https://{RAPIDAPI_HOST}/v3/fixtures"
+    # Jalqabarratti live=all ilaalla; yoo dhabe, taphoota har'aa (today) fiduufis ni danda'ama
     querystring = {"live": "all"}
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -109,8 +110,18 @@ def get_live_matches_from_rapidapi():
             return []
 
         data = response.json().get("response", [])
-        matches = []
+        
+        # Yoo taphooni live "0" ta'an, taphoota har'aa (status isaa live ta'an) qofa akka fidu gochuuf
+        if not data:
+            from datetime import datetime
+            today_str = datetime.utcnow().strftime("%Y-%m-%d")
+            response = requests.get(url, headers=headers, params={"date": today_str}, timeout=15)
+            if response.status_code == 200:
+                all_today = response.json().get("response", [])
+                # Taphoota ammaa live irra jiran qofa filachuu (short status: 1H, HT, 2H, ET, etc.)
+                data = [m for m in all_today if m.get("fixture", {}).get("status", {}).get("short") in ["1H", "HT", "2H", "ET", "BT", "P"]]
 
+        matches = []
         for item in data:
             fixture = item.get("fixture", {})
             teams = item.get("teams", {})
