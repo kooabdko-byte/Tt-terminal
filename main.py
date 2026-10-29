@@ -12,7 +12,7 @@ logger = logging.getLogger("BBK")
 BOT_TOKEN = "8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc"
 CHAT_ID = "1296460762"
 
-LIVE_URL = "https://raw.githubusercontent.com/openfootball/football.json/master/2023-24/en.1.json"
+LIVE_URL = "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=2026-10-29"
 
 seen_matches = set()
 
@@ -20,7 +20,7 @@ seen_matches = set()
 def telegram_send(text):
     global BOT_TOKEN, CHAT_ID
     if not BOT_TOKEN or not CHAT_ID:
-        logger.error(f"CRITICAL: Telegram token ('{BOT_TOKEN}') or chat ID ('{CHAT_ID}') is missing!")
+        logger.error(f"CRITICAL: Telegram token or chat ID is missing!")
         return False
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -45,17 +45,14 @@ def telegram_send(text):
         )
 
         result = response.json()
-        logger.info(f"Telegram Raw Response: {result}")
-
         if not result.get("ok"):
             logger.error(f"Telegram API error description: {result.get('description')}")
             return False
 
-        logger.info("Telegram message sent successfully")
         return True
 
     except Exception as e:
-        logger.exception(f"Telegram sending failed with exception: {e}")
+        logger.exception(f"Telegram sending failed: {e}")
         return False
 
 
@@ -66,7 +63,7 @@ def get_live_matches():
     response = requests.get(LIVE_URL, headers=headers, timeout=20)
     response.raise_for_status()
     data = response.json()
-    matches = data.get("matches") or data.get("events") or []
+    matches = data.get("events") or []
     return matches
 
 
@@ -76,24 +73,17 @@ async def scan_matches():
             matches = await asyncio.to_thread(get_live_matches)
 
             for match in matches:
-                match_id = match.get("id") or match.get("idEvent")
+                match_id = match.get("idEvent")
 
                 if not match_id:
                     continue
 
-                team1 = match.get("team1")
-                team2 = match.get("team2")
-                if isinstance(team1, dict):
-                    home = team1.get("name", "Home")
-                    away = team2.get("name", "Away")
-                else:
-                    home = match.get("strHomeTeam") or "Home"
-                    away = match.get("strAwayTeam") or "Away"
-                    
-                league = match.get("name") or match.get("strLeague") or "Unknown league"
+                home = match.get("strHomeTeam") or "Home"
+                away = match.get("strAwayTeam") or "Away"
+                league = match.get("strLeague") or "Unknown league"
 
                 score = "0:0"
-                minute = "Live"
+                minute = match.get("strTime") or "Live"
 
                 state = f"{score}|{minute}"
                 unique_key = f"{match_id}|{state}"
@@ -175,22 +165,4 @@ async def live_scores():
         return {
             "status": "error",
             "message": "Live scores are temporarily unavailable"
-        }
-
-
-@app.get("/api/run-live-scan")
-async def run_live_scan():
-    try:
-        matches = await asyncio.to_thread(get_live_matches)
-        return {
-            "status": "success",
-            "message": "Live scan completed",
-            "matches_found": len(matches)
-        }
-
-    except Exception:
-        logger.exception("Manual live scan failed")
-        return {
-            "status": "error",
-            "message": "Live scan failed. Check Render logs."
         }
