@@ -12,8 +12,8 @@ logger = logging.getLogger("BBK")
 BOT_TOKEN = "8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc"
 CHAT_ID = "1296460762"
 
-RAPIDAPI_KEY = "sportapi7.p.rapidapi.com"
-RAPIDAPI_HOST = "api-football-v1.p.rapidapi.com"
+RAPIDAPI_KEY = "d1ad3d7f77mshf3e5ebb95be15bap11d73bjsn2443e9f131af"
+RAPIDAPI_HOST = "sportapi7.p.rapidapi.com"
 
 seen_matches = set()
 
