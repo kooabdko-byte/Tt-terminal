@@ -49,34 +49,40 @@ def telegram_send(text):
 
 
 def get_live_matches():
-    response = requests.get(LIVE_URL, timeout=20)
-    response.raise_for_status()
-    data = response.json()
-    response_data = data.get("response", [])
-    
-    matches = []
-    for item in response_data:
-        title = item.get("title", "")
-        league = item.get("competition", "Live Match")
-        match_id = item.get("match_id") or title
-        
-        teams = title.split(" - ")
-        if len(teams) < 2:
-            continue
+    try:
+        response = requests.get(LIVE_URL, timeout=15)
+        if response.status_code != 200:
+            return []
             
-        home = teams[0].strip()
-        away = teams[1].strip()
+        data = response.json()
+        response_data = data.get("response", [])
         
-        matches.append({
-            "id": str(match_id),
-            "home": home,
-            "away": away,
-            "league": league,
-            "score": "Live",
-            "minute": "Live"
-        })
-        
-    return matches
+        matches = []
+        for item in response_data:
+            title = item.get("title", "")
+            league = item.get("competition", "Live Match")
+            match_id = item.get("match_id") or title
+            
+            teams = title.split(" - ")
+            if len(teams) < 2:
+                continue
+                
+            home = teams[0].strip()
+            away = teams[1].strip()
+            
+            matches.append({
+                "id": str(match_id),
+                "home": home,
+                "away": away,
+                "league": league,
+                "score": "Live",
+                "minute": "Live"
+            })
+            
+        return matches
+    except Exception as e:
+        logger.warning(f"Failed to fetch live matches: {e}")
+        return []
 
 
 async def scan_matches():
@@ -164,9 +170,8 @@ async def live_scores():
             "matches": matches
         }
 
-    except Exception:
-        logger.exception("Could not retrieve live scores")
+    except Exception as e:
         return {
             "status": "error",
-            "message": "Live scores are temporarily unavailable"
+            "message": str(e)
         }
