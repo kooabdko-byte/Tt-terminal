@@ -9,8 +9,8 @@ from fastapi import FastAPI
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("BBK")
 
-BOT_TOKEN = os.getenv("8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc", "").strip()
-CHAT_ID = os.getenv("1296460762", "").strip()
+BOT_TOKEN = "8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc"
+CHAT_ID = "1296460762"
 
 LIVE_URL = "https://raw.githubusercontent.com/openfootball/football.json/master/2023-24/en.1.json"
 
@@ -19,10 +19,6 @@ seen_matches = set()
 
 def telegram_send(text):
     global BOT_TOKEN, CHAT_ID
-    if not BOT_TOKEN or not CHAT_ID:
-        BOT_TOKEN = os.getenv("8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc", "").strip()
-        CHAT_ID = os.getenv("1296460762", "").strip()
-
     if not BOT_TOKEN or not CHAT_ID:
         logger.error(f"CRITICAL: Telegram token ('{BOT_TOKEN}') or chat ID ('{CHAT_ID}') is missing!")
         return False
