@@ -42,7 +42,7 @@ def telegram_send(home, away, league, minute, score, pressure_team):
                     "inline_keyboard": [[
                         {
                             "text": "Открыть терминал",
-                            "url": "https://LINKI_WEB_APP_KEE.onrender.com"
+                            "url": "https://tt-terminal-20-02oc.onrender.com"
                         }
                     ]]
                 }
@@ -55,66 +55,79 @@ def telegram_send(home, away, league, minute, score, pressure_team):
         return False
 
 def get_live_matches_from_rapidapi():
-    url = f"https://{RAPIDAPI_HOST}/v1/matches/live"
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
         "X-RapidAPI-Host": RAPIDAPI_HOST
     }
 
-    try:
-        response = requests.get(url, headers=headers, timeout=15)
-        
-        if response.status_code != 200:
-            url_alt = f"https://{RAPIDAPI_HOST}/v1/events/live"
-            response = requests.get(url_alt, headers=headers, timeout=15)
-            if response.status_code != 200:
-                return []
+    endpoints = [
+        (f"https://{RAPIDAPI_HOST}/v1/matches/live", {}),
+        (f"https://{RAPIDAPI_HOST}/v1/events/live", {}),
+        (f"https://{RAPIDAPI_HOST}/v3/fixtures", {"live": "all"})
+    ]
 
-        res_data = response.json()
-        
-        data = res_data.get("events", res_data.get("matches", res_data.get("response", [])))
-        if not isinstance(data, list):
-            data = []
+    res_data = None
+    for url, params in endpoints:
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+            if response.status_code == 200:
+                res_data = response.json()
+                break
+        except Exception as e:
+            logger.warning(f"Error calling {url}: {e}")
 
-        matches = []
-        for item in data:
-            home_team = item.get("homeTeam", item.get("teams", {}).get("home", {}))
-            away_team = item.get("awayTeam", item.get("teams", {}).get("away", {}))
-            
-            home = home_team.get("name", "Home Team") if isinstance(home_team, dict) else "Home Team"
-            away = away_team.get("name", "Away Team") if isinstance(away_team, dict) else "Away Team"
-            
-            league_info = item.get("tournament", item.get("league", {}))
-            league = league_info.get("name", "Live League") if isinstance(league_info, dict) else "Live League"
-
-            match_id = item.get("id", item.get("fixture", {}).get("id", "1"))
-            
-            home_score = item.get("homeScore", item.get("goals", {}).get("home", 0))
-            away_score = item.get("awayScore", item.get("goals", {}).get("away", 0))
-            if not isinstance(home_score, int): home_score = 0
-            if not isinstance(away_score, int): away_score = 0
-            score = f"{home_score}:{away_score}"
-
-            status_info = item.get("status", {})
-            elapsed = status_info.get("elapsed", status_info.get("minute", 15)) if isinstance(status_info, dict) else 15
-            minute = f"{elapsed}'" if elapsed else "Live"
-
-            pressure_team = home
-
-            matches.append({
-                "id": str(match_id),
-                "home": home,
-                "away": away,
-                "league": league,
-                "score": score,
-                "minute": minute,
-                "pressure_team": pressure_team
-            })
-
-        return matches
-    except Exception as e:
-        logger.warning(f"API Fetch failed: {e}")
+    if not res_data:
         return []
+
+    if isinstance(res_data, list):
+        data = res_data
+    elif isinstance(res_data, dict):
+        data = res_data.get("events", res_data.get("matches", res_data.get("response", res_data.get("data", []))))
+    else:
+        data = []
+
+    if not isinstance(data, list):
+        data = []
+
+    matches = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+
+        home_team = item.get("homeTeam", item.get("teams", {}).get("home", {}))
+        away_team = item.get("awayTeam", item.get("teams", {}).get("away", {}))
+        
+        home = home_team.get("name", "Home Team") if isinstance(home_team, dict) else "Home Team"
+        away = away_team.get("name", "Away Team") if isinstance(away_team, dict) else "Away Team"
+        
+        league_info = item.get("tournament", item.get("league", {}))
+        league = league_info.get("name", "Live League") if isinstance(league_info, dict) else "Live League"
+
+        match_id = item.get("id", item.get("fixture", {}).get("id", "1"))
+        
+        home_score = item.get("homeScore", item.get("goals", {}).get("home", 0))
+        away_score = item.get("awayScore", item.get("goals", {}).get("away", 0))
+        if not isinstance(home_score, int): home_score = 0
+        if not isinstance(away_score, int): away_score = 0
+        score = f"{home_score}:{away_score}"
+
+        status_info = item.get("status", {})
+        elapsed = status_info.get("elapsed", status_info.get("minute", 15)) if isinstance(status_info, dict) else 15
+        minute = f"{elapsed}'" if elapsed else "Live"
+
+        pressure_team = home
+
+        matches.append({
+            "id": str(match_id),
+            "home": home,
+            "away": away,
+            "league": league,
+            "score": score,
+            "minute": minute,
+            "pressure_team": pressure_team
+        })
+
+    return matches
 
 async def scan_matches():
     while True:
