@@ -12,7 +12,7 @@ logger = logging.getLogger("BBK")
 
 BOT_TOKEN = "8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc"
 CHAT_ID = "1296460762"
-SPORTMONKS_TOKEN = "Y7r94rQyV92W7sT8pQ1x5mN3zL0vK9jH6dF4gS2bA8wE1rC5tY3uI6oP"
+SPORTMONKS_TOKEN = "https://api.sportmonks.com/v3/?api_token=YOUR_TOKEN"
 
 seen_matches = set()
 
