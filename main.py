@@ -232,4 +232,11 @@ def test_telegram():
         "shots": ("4", "2"),
         "shots_on_target": ("3", "1"),
         "corners": ("3", "0"),
-        "possession
+        "possession": ("70%", "30%"),
+        "signal_strength": "60%"
+    }
+    success = telegram_send("FC Stade-Lausanne-Ouchy", "Yverdon-Sport FC", "Challenge League", "27", "0:1", "FC Stade-Lausanne-Ouchy", sample_stats)
+    if success:
+        return {"status": "success", "message": "Ergaan Telegram milkaa'inaan ergameera!"}
+    else:
+        return {"status": "error", "message": "Ergaa erguu irratti rakkoon jira."}
