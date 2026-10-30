@@ -63,18 +63,33 @@ def get_live_matches_from_rapidapi():
     endpoints = [
         (f"https://{RAPIDAPI_HOST}/v1/matches/live", {}),
         (f"https://{RAPIDAPI_HOST}/v1/events/live", {}),
-        (f"https://{RAPIDAPI_HOST}/v3/fixtures", {"live": "all"})
+        (f"https://{RAPIDAPI_HOST}/v3/fixtures", {"live": "all"}),
+        (f"https://{RAPIDAPI_HOST}/matches/live", {}),
+        (f"https://{RAPIDAPI_HOST}/api/v1/matches/live", {})
     ]
 
     res_data = None
     for url, params in endpoints:
         try:
             response = requests.get(url, headers=headers, params=params, timeout=15)
+            logger.info(f"Testing URL: {url} -> Status: {response.status_code}")
             if response.status_code == 200:
                 res_data = response.json()
+                logger.info(f"Successfully fetched from {url}")
                 break
         except Exception as e:
             logger.warning(f"Error calling {url}: {e}")
+
+    if not res_data:
+        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        fallback_url = f"https://{RAPIDAPI_HOST}/v3/fixtures"
+        try:
+            response = requests.get(fallback_url, headers=headers, params={"date": today_str}, timeout=15)
+            if response.status_code == 200:
+                res_data = response.json()
+                logger.info("Fetched fallback fixtures by date")
+        except Exception as e:
+            logger.warning(f"Fallback error: {e}")
 
     if not res_data:
         return []
@@ -82,7 +97,7 @@ def get_live_matches_from_rapidapi():
     if isinstance(res_data, list):
         data = res_data
     elif isinstance(res_data, dict):
-        data = res_data.get("events", res_data.get("matches", res_data.get("response", res_data.get("data", []))))
+        data = res_data.get("events", res_data.get("matches", res_data.get("response", res_data.get("data", res_data.get("fixtures", [])))))
     else:
         data = []
 
@@ -97,11 +112,11 @@ def get_live_matches_from_rapidapi():
         home_team = item.get("homeTeam", item.get("teams", {}).get("home", {}))
         away_team = item.get("awayTeam", item.get("teams", {}).get("away", {}))
         
-        home = home_team.get("name", "Home Team") if isinstance(home_team, dict) else "Home Team"
-        away = away_team.get("name", "Away Team") if isinstance(away_team, dict) else "Away Team"
+        home = home_team.get("name", "Home Team") if isinstance(home_team, dict) else str(home_team)
+        away = away_team.get("name", "Away Team") if isinstance(away_team, dict) else str(away_team)
         
-        league_info = item.get("tournament", item.get("league", {}))
-        league = league_info.get("name", "Live League") if isinstance(league_info, dict) else "Live League"
+        league_info = item.get("tournament", item.get("league", item.get("competition", {})))
+        league = league_info.get("name", "Live League") if isinstance(league_info, dict) else str(league_info)
 
         match_id = item.get("id", item.get("fixture", {}).get("id", "1"))
         
