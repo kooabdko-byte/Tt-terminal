@@ -5,6 +5,7 @@ import requests
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("BBK")
@@ -53,51 +54,8 @@ def telegram_send(home, away, league, minute, score, pressure_team):
         logger.exception(f"Telegram error: {e}")
         return False
 
-def get_match_statistics(match_id, home_name, away_name):
-    url = f"https://{RAPIDAPI_HOST}/v3/fixtures/statistics"
-    headers = {
-        "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": RAPIDAPI_HOST
-    }
-    
-    try:
-        response = requests.get(url, headers=headers, params={"fixture": match_id}, timeout=10)
-        if response.status_code != 200:
-            return home_name
-
-        data = response.json().get("response", [])
-        if len(data) < 2:
-            return home_name
-
-        home_shots = 0
-        away_shots = 0
-
-        for team_stat in data:
-            team_name = team_stat.get("team", {}).get("name")
-            statistics = team_stat.get("statistics", [])
-            
-            shots = 0
-            for stat in statistics:
-                if stat.get("type") in ["Total Shots", "Shots on Goal"]:
-                    val = stat.get("value")
-                    if val is not None:
-                        shots += int(val)
-            
-            if team_name == home_name:
-                home_shots = shots
-            else:
-                away_shots = shots
-
-        if away_shots > home_shots:
-            return away_name
-        return home_name
-
-    except Exception:
-        return home_name
-
 def get_live_matches_from_rapidapi():
     url = f"https://{RAPIDAPI_HOST}/v3/fixtures"
-    # Jalqabarratti live=all ilaalla; yoo dhabe, taphoota har'aa (today) fiduufis ni danda'ama
     querystring = {"live": "all"}
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -111,14 +69,11 @@ def get_live_matches_from_rapidapi():
 
         data = response.json().get("response", [])
         
-        # Yoo taphooni live "0" ta'an, taphoota har'aa (status isaa live ta'an) qofa akka fidu gochuuf
         if not data:
-            from datetime import datetime
             today_str = datetime.utcnow().strftime("%Y-%m-%d")
             response = requests.get(url, headers=headers, params={"date": today_str}, timeout=15)
             if response.status_code == 200:
                 all_today = response.json().get("response", [])
-                # Taphoota ammaa live irra jiran qofa filachuu (short status: 1H, HT, 2H, ET, etc.)
                 data = [m for m in all_today if m.get("fixture", {}).get("status", {}).get("short") in ["1H", "HT", "2H", "ET", "BT", "P"]]
 
         matches = []
@@ -129,18 +84,18 @@ def get_live_matches_from_rapidapi():
             league_info = item.get("league", {})
 
             match_id = fixture.get("id")
-            home = teams.get("home", {}).get("name", "Home")
-            away = teams.get("away", {}).get("name", "Away")
-            league = league_info.get("name", "League")
+            home = teams.get("home", {}).get("name", "Home Team")
+            away = teams.get("away", {}).get("name", "Away Team")
+            league = league_info.get("name", "Live League")
             
             home_goals = goals.get("home", 0) if goals.get("home") is not None else 0
             away_goals = goals.get("away", 0) if goals.get("away") is not None else 0
             score = f"{home_goals}:{away_goals}"
             
-            elapsed = fixture.get("status", {}).get("elapsed", 0)
+            elapsed = fixture.get("status", {}).get("elapsed", 15)
             minute = f"{elapsed}'" if elapsed else "Live"
 
-            pressure_team = get_match_statistics(match_id, home, away)
+            pressure_team = home
 
             matches.append({
                 "id": str(match_id),
@@ -209,8 +164,8 @@ def api_live_matches():
 
 @app.get("/api/test-telegram")
 def test_telegram():
-    success = telegram_send("Test Home", "Test Away", "Test League", "45'", "0:0", "Test Team")
+    success = telegram_send("Real Madrid", "Barcelona", "La Liga", "75'", "2:1", "Real Madrid")
     if success:
         return {"status": "success", "message": "Ergaan Telegram irratti milkaa'inaan ergameera!"}
     else:
-        return {"status": "error", "message": "Ergaa erguu irratti rakkoon jira, Bot Token ykn Chat ID kee ilaali."}
+        return {"status": "error", "message": "Ergaa erguu irratti rakkoon jira."}
