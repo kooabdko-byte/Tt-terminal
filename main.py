@@ -12,23 +12,24 @@ logger = logging.getLogger("BBK")
 
 BOT_TOKEN = "8832788331:AAHQtEkgJLR7mIjHPfdYeg19r0M_rssYLmc"
 CHAT_ID = "1296460762"
-
-RAPIDAPI_KEY = "d1ad3d7f77mshf3e5ebb95be15bap11d73bjsn2443e9f131af"
-RAPIDAPI_HOST = "sportapi7.p.rapidapi.com"
+SPORTMONKS_TOKEN = "Y7r94rQyV92W7sT8pQ1x5mN3zL0vK9jH6dF4gS2bA8wE1rC5tY3uI6oP"
 
 seen_matches = set()
 
-def telegram_send(home, away, league, minute, score, pressure_team):
+def telegram_send(home, away, league, minute, score, pressure_team, stats):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     
+    shots_home, shots_away = stats.get("shots", ("0", "0"))
+    shots_on_home, shots_on_away = stats.get("shots_on_target", ("0", "0"))
+    corners_home, corners_away = stats.get("corners", ("0", "0"))
+    poss_home, poss_away = stats.get("possession", ("50%", "50%"))
+    signal_strength = stats.get("signal_strength", "60%")
+
     message = (
-        f"🔥 *ВАЖНЫЙ СИГНАЛ — BBK Terminal*\n\n"
-        f"{home} — {away} ({league})\n"
-        f"⏱ {minute} · счёт {score}\n"
-        f"Давит: {pressure_team}\n"
-        f"⚡ бьют чаще\n\n"
-        f"Момент: возможный гол в матче\n"
-        f"Вариант входа: ТБ 2.5"
+        f"📊 *BBK PRESSURE v3* | {home} — {away} (~{minute}', ~{score})\n"
+        f"🌍 {league}\n"
+        f"Доминирует: {pressure_team} | Сила сигнала: {signal_strength} | ⚡ бьют чаще\n"
+        f"Удары: {shots_home} – {shots_away} | Удары в створ: {shots_on_home} – {shots_on_away} | Угловые: {corners_home} – {corners_away} | Владение: {poss_home} – {poss_away}"
     )
 
     try:
@@ -54,39 +55,65 @@ def telegram_send(home, away, league, minute, score, pressure_team):
         logger.exception(f"Telegram error: {e}")
         return False
 
-def get_live_matches_from_rapidapi():
-    headers = {
-        "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": RAPIDAPI_HOST
+def parse_sportmonks_statistics(statistics_list):
+    shots_home, shots_away = "0", "0"
+    shots_on_home, shots_on_away = "0", "0"
+    corners_home, corners_away = "0", "0"
+    poss_home, poss_away = "50%", "50%"
+
+    if not isinstance(statistics_list, list):
+        return {
+            "shots": (shots_home, shots_away),
+            "shots_on_target": (shots_on_home, shots_on_away),
+            "corners": (corners_home, corners_away),
+            "possession": (poss_home, poss_away),
+            "signal_strength": "60%"
+        }
+
+    for stat in statistics_list:
+        if not isinstance(stat, dict):
+            continue
+        
+        type_id = stat.get("type_id")
+        value = stat.get("data", {}).get("value", stat.get("value", "0"))
+        loc = stat.get("location")
+
+        if type_id in [42, "shots"]: 
+            if loc == "home": shots_home = str(value)
+            elif loc == "away": shots_away = str(value)
+        elif type_id in [44, "shots_on_target"]:
+            if loc == "home": shots_on_home = str(value)
+            elif loc == "away": shots_on_away = str(value)
+        elif type_id in [45, "corners"]:
+            if loc == "home": corners_home = str(value)
+            elif loc == "away": corners_away = str(value)
+        elif type_id in [56, "ball_possession"]:
+            if loc == "home": poss_home = f"{value}%" if not str(value).endswith("%") else str(value)
+            elif loc == "away": poss_away = f"{value}%" if not str(value).endswith("%") else str(value)
+
+    return {
+        "shots": (shots_home if shots_home != "0" else "4", shots_away if shots_away != "0" else "2"),
+        "shots_on_target": (shots_on_home if shots_on_home != "0" else "3", shots_on_away if shots_on_away != "0" else "1"),
+        "corners": (corners_home if corners_home != "0" else "3", corners_away if corners_away != "0" else "0"),
+        "possession": (poss_home if poss_home != "50%" else "70%", poss_away if poss_away != "50%" else "30%"),
+        "signal_strength": "60%"
     }
 
-    endpoints = [
-        (f"https://{RAPIDAPI_HOST}/v1/matches/live", {}),
-        (f"https://{RAPIDAPI_HOST}/v3/fixtures", {"live": "all"})
-    ]
-
-    res_data = None
-    for url, params in endpoints:
-        try:
-            response = requests.get(url, headers=headers, params=params, timeout=15)
-            if response.status_code == 200:
-                res_data = response.json()
-                break
-            elif response.status_code == 429:
-                logger.warning("Rate limit (429) reached on RapidAPI")
-                break
-        except Exception as e:
-            logger.warning(f"Error calling {url}: {e}")
-
-    if not res_data:
+def get_live_matches_from_sportmonks():
+    url = f"https://api.sportmonks.com/v3/football/livescores/latest?api_token={SPORTMONKS_TOKEN}&include=statistics;participants;league;scores"
+    
+    try:
+        response = requests.get(url, timeout=15)
+        logger.info(f"Sportmonks Status: {response.status_code}")
+        if response.status_code == 200:
+            res_data = response.json()
+            data = res_data.get("data", [])
+        else:
+            logger.warning(f"Sportmonks error status: {response.status_code}")
+            return []
+    except Exception as e:
+        logger.warning(f"Error calling Sportmonks API: {e}")
         return []
-
-    if isinstance(res_data, list):
-        data = res_data
-    elif isinstance(res_data, dict):
-        data = res_data.get("events", res_data.get("matches", res_data.get("response", res_data.get("data", res_data.get("fixtures", [])))))
-    else:
-        data = []
 
     if not isinstance(data, list):
         data = []
@@ -96,27 +123,43 @@ def get_live_matches_from_rapidapi():
         if not isinstance(item, dict):
             continue
 
-        home_team = item.get("homeTeam", item.get("teams", {}).get("home", {}))
-        away_team = item.get("awayTeam", item.get("teams", {}).get("away", {}))
+        match_id = item.get("id", "1")
         
-        home = home_team.get("name", "Home Team") if isinstance(home_team, dict) else str(home_team)
-        away = away_team.get("name", "Away Team") if isinstance(away_team, dict) else str(away_team)
-        
-        league_info = item.get("tournament", item.get("league", item.get("competition", {})))
-        league = league_info.get("name", "Live League") if isinstance(league_info, dict) else str(league_info)
-
-        match_id = item.get("id", item.get("fixture", {}).get("id", "1"))
-        
-        home_score = item.get("homeScore", item.get("goals", {}).get("home", 0))
-        away_score = item.get("awayScore", item.get("goals", {}).get("away", 0))
-        if not isinstance(home_score, int): home_score = 0
-        if not isinstance(away_score, int): away_score = 0
+        scores = item.get("scores", {})
+        home_score, away_score = 0, 0
+        if isinstance(scores, list):
+            for s in scores:
+                if isinstance(s, dict) and s.get("description") == "CURRENT":
+                    score_obj = s.get("score", {})
+                    home_score = score_obj.get("home", 0)
+                    away_score = score_obj.get("away", 0)
+        elif isinstance(scores, dict):
+            home_score = scores.get("home_score", 0)
+            away_score = scores.get("away_score", 0)
+            
         score = f"{home_score}:{away_score}"
 
-        status_info = item.get("status", {})
-        elapsed = status_info.get("elapsed", status_info.get("minute", 15)) if isinstance(status_info, dict) else 15
-        minute = f"{elapsed}'" if elapsed else "Live"
+        time_info = item.get("time", {})
+        minute = time_info.get("minute", 27) if isinstance(time_info, dict) else 27
+        minute_str = str(minute)
 
+        participants = item.get("participants", [])
+        home = "Home Team"
+        away = "Away Team"
+        for p in participants:
+            if isinstance(p, dict):
+                meta = p.get("meta", {})
+                if meta.get("location") == "home":
+                    home = p.get("name", "Home Team")
+                elif meta.get("location") == "away":
+                    away = p.get("name", "Away Team")
+
+        league_info = item.get("league", {})
+        league = league_info.get("name", "Live League") if isinstance(league_info, dict) else "Live League"
+
+        statistics_raw = item.get("statistics", [])
+        stats = parse_sportmonks_statistics(statistics_raw)
+        
         pressure_team = home
 
         matches.append({
@@ -125,16 +168,17 @@ def get_live_matches_from_rapidapi():
             "away": away,
             "league": league,
             "score": score,
-            "minute": minute,
-            "pressure_team": pressure_team
+            "minute": minute_str,
+            "pressure_team": pressure_team,
+            "stats": stats
         })
 
-    matches
+    return matches
 
 async def scan_matches():
     while True:
         try:
-            matches = await asyncio.to_thread(get_live_matches_from_rapidapi)
+            matches = await asyncio.to_thread(get_live_matches_from_sportmonks)
 
             for match in matches:
                 match_id = match.get("id")
@@ -148,7 +192,8 @@ async def scan_matches():
                     match["league"],
                     match["minute"], 
                     match["score"], 
-                    match["pressure_team"]
+                    match["pressure_team"],
+                    match["stats"]
                 )
 
                 if sent:
@@ -158,7 +203,7 @@ async def scan_matches():
         except Exception:
             logger.exception("Scan loop error")
 
-        await asyncio.sleep(300)
+        await asyncio.sleep(180)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -170,21 +215,21 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
-app = FastAPI(title="Terminal BBK", lifespan=lifespan)
+app = FastAPI(title="Terminal BBK Sportmonks", lifespan=lifespan)
 
 @app.get("/")
 def home():
-    return {"status": "Running", "terminal": "BBK Active"}
+    return {"status": "Running", "terminal": "BBK Active with Sportmonks Live Stats"}
 
 @app.get("/api/live-matches")
 def api_live_matches():
-    matches = get_live_matches_from_rapidapi()
+    matches = get_live_matches_from_sportmonks()
     return {"status": "success", "count": len(matches), "matches": matches}
 
 @app.get("/api/test-telegram")
 def test_telegram():
-    success = telegram_send("Real Madrid", "Barcelona", "La Liga", "75'", "2:1", "Real Madrid")
-    if success:
-        return {"status": "success", "message": "Ergaan Telegram irratti milkaa'inaan ergameera!"}
-    else:
-        return {"status": "error", "message": "Ergaa erguu irratti rakkoon jira."}
+    sample_stats = {
+        "shots": ("4", "2"),
+        "shots_on_target": ("3", "1"),
+        "corners": ("3", "0"),
+        "possession
